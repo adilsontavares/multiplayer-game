@@ -26,7 +26,7 @@ int main()
 	sf::RenderWindow window(sf::VideoMode(800, 600), "Ola mundo");
 
 	playerShape.setRadius(40);
-	playerShape.setPosition(100, 100);
+	playerShape.setPosition(0, 0);
 	playerShape.setFillColor(sf::Color::Cyan);
 
 	while (window.isOpen())
