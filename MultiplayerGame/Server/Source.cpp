@@ -2,6 +2,10 @@
 #include <WS2tcpip.h>
 #include <iostream>
 #include <Common.h>
+#include <thread>
+#include <mutex>
+#include <vector>
+#include <algorithm>
 
 #include "Player.h"
 
@@ -12,6 +16,13 @@ sockaddr_in serverAddr;
 void setupSockets();
 void terminateSockets();
 
+int movX;
+int movY;
+
+std::mutex mutex;
+
+void handleMovement();
+
 int main()
 {
 	setupSockets();
@@ -21,43 +32,62 @@ int main()
 	sockaddr_in addr;
 	socklen_t addrLen = sizeof(addr);
 
+	new std::thread(handleMovement);
+
+	std::vector<sockaddr_in> sockets;
+
 	while (true)
 	{
 		result = recvfrom(serverSocket, buffer, PACKET_SIZE, 0, (SOCKADDR*)&addr, &addrLen);
+
+		if (std::find_if(sockets.begin(), sockets.end(), [&](sockaddr_in a) { return a.sin_addr.s_addr == addr.sin_addr.s_addr && a.sin_port == addr.sin_port; }) == sockets.end())
+			sockets.push_back(addr);
 
 		if (result != SOCKET_ERROR)
 		{
 			CommandMoveRequest req = *((CommandMoveRequest*)buffer);
 
-			std::cout << "Message received: " << std::endl;
-			std::cout << "LEFT: \t" << req.left << std::endl;
-			std::cout << "RIGHT: \t" << req.right << std::endl;
-			std::cout << "UP: \t" << req.up << std::endl;
-			std::cout << "DOWN: \t" << req.down << std::endl;
-			std::cout << "-" << std::endl;
+			std::cout << "Message received!" << std::endl;
 
-			if (req.left)
-				mainPlayer.x -= PLAYER_SPEED;
-			if (req.right)
-				mainPlayer.x += PLAYER_SPEED;
-			if (req.down)
-				mainPlayer.y += PLAYER_SPEED;
-			if (req.up)
-				mainPlayer.y -= PLAYER_SPEED;
+			mutex.lock();
+			movX = req.movX;
+			movY = req.movY;
 
 			CommandMoveResponse res;
 			res.x = mainPlayer.x;
 			res.y = mainPlayer.y;
+			res.movX = movX;
+			res.movY = movY;
+			mutex.unlock();
 
-			result = sendto(serverSocket, (char*)&res, PACKET_SIZE, 0, (sockaddr*)&addr, addrLen);
-			if (result == SOCKET_ERROR)
-				std::cout << "Could not send response: " << WSAGetLastError() << std::endl;
+			std::cout << "Enviando para " << sockets.size() << " sockets..." << std::endl;
+			for (sockaddr_in addr : sockets)
+			{
+				result = sendto(serverSocket, (char*)&res, PACKET_SIZE, 0, (sockaddr*)&addr, sizeof(addr));
+				if (result == SOCKET_ERROR)
+					std::cout << "Could not send response: " << WSAGetLastError() << std::endl;
+			}
 		}
 	}
 
 	terminateSockets();
 
 	return 0;
+}
+
+void handleMovement()
+{
+	while (true)
+	{
+		Sleep(1000.0 / 60.0);
+
+		mutex.lock();
+
+		mainPlayer.x += movX * PLAYER_SPEED;
+		mainPlayer.y += movY * PLAYER_SPEED;
+
+		mutex.unlock();
+	}
 }
 
 void setupSockets()

@@ -11,11 +11,17 @@ sockaddr_in addr;
 
 sf::CircleShape playerShape;
 
+int curMovX;
+int curMovY;
+int oldMovX;
+int oldMovY;
+
 void setupSockets();
 void terminateSockets();
 void receivePackets();
 
-void tratarMovimentacao(sf::CircleShape& shape, sf::RenderWindow& window);
+void handleMovement(sf::CircleShape& shape, int movX, int movY);
+void handleMovement(sf::CircleShape& shape, sf::RenderWindow& window);
 
 int main()
 {
@@ -31,6 +37,8 @@ int main()
 
 	while (window.isOpen())
 	{
+		Sleep(1000.0 / 60.0);
+
 		sf::Event event;
 
 		while (window.pollEvent(event))
@@ -39,7 +47,8 @@ int main()
 				window.close();
 		}
 
-		tratarMovimentacao(playerShape, window);
+		handleMovement(playerShape, window);
+		handleMovement(playerShape, curMovX, curMovY);
 
 		window.clear();
 		window.draw(playerShape);
@@ -89,31 +98,47 @@ void receivePackets()
 		if (result != SOCKET_ERROR)
 		{
 			CommandMoveResponse res = *((CommandMoveResponse*)buffer);
+
+			oldMovX = curMovX = res.movX;
+			oldMovY = curMovY = res.movY;
+
+			std::cout << "Received: " << curMovX << ", " << curMovY << std::endl;
+
 			playerShape.setPosition(res.x, res.y);
 		}
 	}
 }
 
-void tratarMovimentacao(sf::CircleShape& shape, sf::RenderWindow& window)
+void handleMovement(sf::CircleShape& shape, int movX, int movY)
 {
-	const float speed = 0.15f;
-
-	auto movX = sf::Keyboard::isKeyPressed(sf::Keyboard::Right) - sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
-	auto movY = sf::Keyboard::isKeyPressed(sf::Keyboard::Down) - sf::Keyboard::isKeyPressed(sf::Keyboard::Up);
+	const float speed = PLAYER_SPEED;
 
 	auto pos = shape.getPosition();
+
 	pos.x += movX * speed;
 	pos.y += movY * speed;
 
-	if (movX != 0 || movY != 0)
+	shape.setPosition(pos);
+}
+
+void handleMovement(sf::CircleShape& shape, sf::RenderWindow& window)
+{
+	if (!window.hasFocus())
+		return;
+
+	curMovX = sf::Keyboard::isKeyPressed(sf::Keyboard::Right) - sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
+	curMovY = sf::Keyboard::isKeyPressed(sf::Keyboard::Down) - sf::Keyboard::isKeyPressed(sf::Keyboard::Up);
+
+	if (curMovX != oldMovX || curMovY != oldMovY)
 	{
 		CommandMoveRequest req;
 
-		req.left =	(movX < 0);
-		req.right = (movX > 0);
-		req.down =	(movY > 0);
-		req.up =	(movY < 0);
+		req.movX = curMovX;
+		req.movY = curMovY;
 
 		sendto(clientSocket, (char*)&req, PACKET_SIZE, 0, (sockaddr*)&serverAddr, sizeof(serverAddr));
+
+		oldMovX = curMovX;
+		oldMovY = curMovY;
 	}
 }

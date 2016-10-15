@@ -4,10 +4,8 @@
 struct CommandMoveRequest
 {
 	int command = CMD_MOVE_CHARACTER_REQ;
-	bool up;
-	bool down;
-	bool right;
-	bool left;
+	int movX;
+	int movY;
 };
 
 struct CommandMoveResponse
@@ -15,4 +13,6 @@ struct CommandMoveResponse
 	int command = CMD_MOVE_CHARACTER_RES;
 	float x;
 	float y;
+	int movX;
+	int movY;
 };
